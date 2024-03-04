@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 from db_client import DatabaseClient  # Adjust this import to your file structure
 
 class API:
@@ -17,7 +17,8 @@ class API:
             try:
                 # Assuming get_data method fetches data from your database
                 data = self.db_client.get_standings_nba()
-                return jsonify(data), 200
+                teams_list = [{"Team": team, **info} for team, info in data["teams"].items()]
+                return jsonify(teams_list), 200
             except Exception as e:
                 return jsonify({"error": str(e)}), 500
 
@@ -27,10 +28,21 @@ class API:
             try:
                 today = datetime.now().strftime("%y%m%d")
                 # Assuming get_data method fetches data from your database
-                data = self.db_client.get_games_nba(today)
-                for game in data["games"]:
+                data_today = self.db_client.get_games_nba(today)
+                for game in data_today["games"]:
+                    game["Date"] = datetime.now().strftime("%y%m%d")
                     game["Game"] = f"{game['HomeTeam']} - {game['AwayTeam']}"
-                return jsonify(data), 200
+                try:
+                    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%y%m%d")
+                    data_tomorrow = self.db_client.get_games_nba(tomorrow)
+                    for game in data_tomorrow["games"]:
+                        game["Date"] = (datetime.now() + timedelta(days=1)).strftime("%y%m%d")
+                        game["Game"] = f"{game['HomeTeam']} - {game['AwayTeam']}"
+                except Exception as e:
+                    return jsonify(data_today), 200
+                #merged_dict = {**data_today, **data_tomorrow}
+                data_today.update(data_tomorrow)
+                return jsonify(data_today), 200
             except Exception as e:
                 return jsonify({"error": str(e)}), 500
 
@@ -40,7 +52,7 @@ class API:
 
     def run(self):
         self.setup_routes()
-        self.app.run(debug=True, port=6020)
+        self.app.run(debug=False, host='0.0.0.0', port=6020)
 
 '''
 @app.route('/data', methods=['GET'])

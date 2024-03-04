@@ -11,7 +11,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 #from selenium.webdriver.firefox.options import Options
 
-class NbaTeamScraper:
+class NbaTeamScraper_espn:
     def __init__(self, isMock):
         self.isMock = isMock
 
@@ -19,22 +19,21 @@ class NbaTeamScraper:
         return "style_row__yBzX8" in tag.get("class", []) and "style_row__12oAB" in tag.get("class", [])
 
     def perform_action_on_element(self, lst, index, action):
-        """
-        Safely get an element from a list by index and perform an action on it.
-
-        Args:
-        - lst: The list from which to fetch the element.
-        - index: The index of the element to fetch.
-        - action: A function that performs the desired action on the element.
-
-        Returns:
-        The result of the action performed on the element, or None if the index is out of bounds.
-        """
-        if index < len(lst):
+        if index < len(lst) and lst[index] is not None:
             element = lst[index]
-            return action(element)
-        else:
-            return None
+            # Ensure 'action' is callable before attempting to call it
+            if callable(action):
+                return action(element)
+        return None
+
+    def safe_extract_text(self, element):
+        """
+        Safely extract text from the specified BeautifulSoup element.
+        Checks if the element and the <span> tag within it exist.
+        """
+        if element and element.find("span", class_="style_price__3Haa9"):
+            return element.find("span", class_="style_price__3Haa9").text.strip()
+        return None
 
     def get_text_from_span(self, element, idx):
         spans = element.find_all("span")
@@ -84,7 +83,7 @@ class NbaTeamScraper:
             print(f"Getting: {url}")
             driver.get(url)
             #time.sleep(6)
-            driver.implicitly_wait(60)  # Waits for 10 seconds
+            driver.implicitly_wait(20)  # Waits for 10 seconds
             html_content = driver.page_source
             driver.quit()
         # Parse the HTML content
@@ -109,14 +108,13 @@ class NbaTeamScraper:
                     cleaned_teams = [' '.join(team.split()) for team in teams]
                     # Find all market values within the row
                     market_values = next_sibling.find_all("button", class_="market-btn style_button__G9pbN style_pill__2U30o style_vertical__2J4sL")
-                    strip_text = lambda x: x.strip()
                     row_data = {
                         'AwayTeam': cleaned_teams[0].strip(),
                         'HomeTeam': cleaned_teams[1].strip(),
                         'AwayHandicap': self.perform_action_on_element(market_values, 0, lambda element: self.get_text_from_span(element, 0)),
                         'HomeHandicap': self.perform_action_on_element(market_values, 1, lambda element: self.get_text_from_span(element, 0)),
-                        'AwayMoneyLineOdds': self.perform_action_on_element(market_values, 2, strip_text),
-                        'HomeMoneyLineOdds': self.perform_action_on_element(market_values, 3, strip_text),
+                        'AwayMoneyLineOdds': self.perform_action_on_element(market_values, 2, self.safe_extract_text),
+                        'HomeMoneyLineOdds': self.perform_action_on_element(market_values, 3, self.safe_extract_text),
                         'OverUnder': self.perform_action_on_element(market_values, 4, lambda element: self.get_text_from_span(element, 0)),
                     }
                     rows.append(row_data)
@@ -135,14 +133,12 @@ class NbaTeamScraper:
 
     def collect_nba_team_data(self):
         data = {}
-        recent_games = 5
 
         # Load the HTML content from the uploaded file
-        data["total"] = self.fetch_team_data(0, self.isMock)
+        data["total"] = self.fetch_team_data(self.isMock)
         sleep_time = randint(3, 6)
         print(f"Sleepin {sleep_time} secs")
         time.sleep(sleep_time)
-        data[f"last{recent_games}"] = self.fetch_team_data(recent_games, self.isMock)
 
         #print(data)
         # Convert to DataFrame
@@ -150,22 +146,14 @@ class NbaTeamScraper:
 
         return data  # Just an example, you'd extract real data
 
-    def fetch_team_data(self, games, mock):
+    def fetch_team_data(self, mock):
         data = {}
         if mock:
-            if games == 5:
-                file_path = './bet_files/Teams Traditional _ Stats _ NBA.com Last5 (25_02_2024 10_26_38).html'
-            else:
-                file_path = './bet_files/Teams Traditional _ Stats _ NBA.com (24_02_2024 16_43_52).html'
+            file_path = './bet_files/NBA Standings - 2023-24 Regular Season League Standings - ESPN (03_03_2024 20_40_08).html'
             with open(file_path, 'r', encoding='utf-8') as file:
                 html_content = file.read()
         else:
-            url = f"https://www.nba.com/stats/teams/traditional?LastNGames={games}"
-            '''print(f"Getting from {url}")
-            response = requests.get(url)
-            print(f"Got response code {response.status_code}")
-            if response.status_code == 200:
-                html_content = response.content'''
+            url = f"https://www.espn.com/nba/standings/_/group/league"
             # Initialize the WebDriver (example with Chrome)
             chrome_options = Options()
             chrome_options.add_argument("--headless")
@@ -197,74 +185,36 @@ class NbaTeamScraper:
             driver.quit()
 
         # Parse the HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'lxml')
 
-        # Find the tbody with the specified class
-        tbody = soup.find('tbody', class_=re.compile(r'^Crom_body__'))
+        # Find all the 'tbody' tags with class 'Table__TBODY'
+        tbodies = soup.find_all("tbody", class_="Table__TBODY")
 
+        # Extract team names from the first 'tbody'
+        team_names = []
+        if tbodies and len(tbodies) > 0:
+            team_names = [abbr.get("title") for abbr in tbodies[0].find_all("abbr", title=True)]
 
-        for tr in tbody.find_all('tr'):
-            tds = tr.find_all('td')
-            team = tds[1].text.strip(),
+        # Extract team stats from the second 'tbody'
+        team_stats = []
+        if len(tbodies) > 1:
+            for tr in tbodies[1].find_all("tr"):
+                stats = [span.text for span in tr.find_all("span", class_="stat-cell")]
+                team_stats.append(stats)
+
+        # Combine team names with their stats
+        for name, stats in zip(team_names, team_stats):
             row_data = {
-                'Games': tds[2].text.strip(),
-                'Wins': tds[3].text.strip(),
-                'Losses': tds[4].text.strip(),
-                'PointsAvg': tds[7].text.strip(),
+                "Team": name,
+                'Games': int(stats[0]) + int(stats[1]),
+                'Wins': stats[0],
+                'Losses': stats[1],
+                'Home': stats[4],
+                'Away': stats[5],
+                'PPG': stats[8],
+                'OPPG':stats[9],
+                'STRK':stats[11],
+                'L10': stats[12]
             }
-            data[team[0]] = row_data
-
-        sleep_time = randint(3, 6)
-        print(f"Sleepin {sleep_time} secs")
-        time.sleep(sleep_time)
-
-        # https: // www.nba.com / stats / teams / opponent
-        # https: // www.nba.com / stats / teams / opponent?LastNGames = 5
-        if mock:
-            if games == 5:
-                file_path2 = './bet_files/Teams Opponent _ Stats _ NBA.com Last5 (25_02_2024 10_25_34).html'
-            else:
-                file_path2 = './bet_files/Teams Opponent _ Stats _ NBA.com (24_02_2024 16_57_09).html'
-            with open(file_path2, 'r', encoding='utf-8') as file:
-                html_content = file.read()
-        else:
-            url = f"https://www.nba.com/stats/teams/opponent?LastNGames={games}"
-            '''response = requests.get(url)
-            if response.status_code == 200:
-                html_content = response.content'''
-            # Initialize the WebDriver (example with Chrome)
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36")
-            # Initialize the WebDriver with the specified options
-            driver = webdriver.Chrome(options=chrome_options)
-
-            # Set the viewport size to match your desktop browser
-            driver.set_window_size(2560, 1440)
-            print(f"Getting: {url}")
-            driver.get(url)
-            #time.sleep(6)
-            driver.implicitly_wait(20)  # Waits for 10 seconds
-            html_content = driver.page_source
-            driver.quit()
-
-        # Parse the HTML content
-        soupOpp = BeautifulSoup(html_content, 'html.parser')
-
-        # Find the tbody with the specified class
-        tbody = soupOpp.find('tbody', class_=re.compile(r'^Crom_body__'))
-
-        # Extract data
-        for tr in tbody.find_all('tr'):
-            tds = tr.find_all('td')
-            team = tds[1].text.strip(),
-            row_data = {
-                'OppReb': tds[7].text.strip(),
-                'OppAss': tds[18].text.strip(),
-                'OppSteal': tds[20].text.strip(),
-                'OppBlock': tds[21].text.strip(),
-                'OppPointsAvg': tds[25].text.strip(),
-            }
-            data.get(team[0]).update(row_data)
-
+            data[name] = row_data
         return data

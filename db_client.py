@@ -23,11 +23,13 @@ class DatabaseClient:
         team_doc = team_list[0]
         # Since _id is an ObjectId, which is also not JSON serializable, you might need to convert it to string
         team_doc["_id"] = str(team_doc["_id"])
+        '''
         l5_cursor = team_collection.find({"category": "last5"})
         l5_list = list(l5_cursor)
         for team in l5_list[0]["teams"]:
             team_doc["teams"][team]["l5_wins"] = l5_list[0]["teams"][team]["Wins"]
             team_doc["teams"][team]["l5_loss"] = l5_list[0]["teams"][team]["Losses"]
+        '''
         return team_list[0]
 
     def get_games_nba(self, game_date):
