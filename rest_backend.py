@@ -11,6 +11,10 @@ class API:
         self.db_client = db_client  # Initialize your database class
 
     def setup_routes(self):
+        @self.app.route('/')
+        def health_check():
+            return 'OK', 200
+
         @self.app.route('/standings/nba', methods=['GET'])
         def get_standings():
             print("Getting standings")

@@ -1,0 +1,1 @@
+MONGODB_URI=mongodb+srv://user:password@cluster0.j9evb.mongodb.net?retryWrites=true&w=majority&appName=Cluster0&w=majority&ssl=true&tlsAllowInvalidCertificates=true

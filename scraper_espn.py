@@ -15,6 +15,13 @@ class NbaTeamScraper_espn:
     def __init__(self, isMock):
         self.isMock = isMock
 
+
+    def normalize_team_name(self, team_name):
+        match team_name:
+            case "LA Clippers":
+                return "Los Angeles Clippers"
+            case _:
+                return team_name
     def has_both_classes(self, tag):
         return "style_row__yBzX8" in tag.get("class", []) and "style_row__12oAB" in tag.get("class", [])
 
@@ -41,6 +48,63 @@ class NbaTeamScraper_espn:
             return spans[idx].text.strip()
         return ""
 
+    def collect_nba_results(self):
+        if self.isMock:
+            file_path = './bet_files/NBA 2023_2024 scores, Basketball USA - Flashscore (06_03_2024 12_26_03).html'
+            with open(file_path, 'r', encoding='utf-8') as file:
+                html_content = file.read()
+        else:
+            url = "https://www.flashscore.com/basketball/usa/nba/"
+            # Initialize the WebDriver (example with Chrome)
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-extensions')  # Disabling extensions can save resources
+            chrome_options.add_argument('--disable-plugins')  # Disable plugins
+            chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+            prefs = {
+                'profile.managed_default_content_settings.images': 2,
+                'profile.managed_default_content_settings.stylesheets': 2,
+                'profile.managed_default_content_settings.javascript': 2,
+            }
+            chrome_options.add_experimental_option('prefs', prefs)
+            # Initialize the WebDriver with the specified options
+            driver = webdriver.Chrome(options=chrome_options)
+
+            # Set the viewport size to match your desktop browser
+            driver.set_window_size(2560, 1440)
+
+            print(f"Getting: {url}")
+            driver.get(url)
+            #time.sleep(6)
+            driver.implicitly_wait(20)  # Waits for 10 seconds
+            html_content = driver.page_source
+            driver.quit()
+
+
+        # Parsing the HTML content with BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        games = soup.find_all('div', class_=['event__match event__match--twoLine', 'event__match event__match--last event__match--twoLine'])
+        #games = soup.select('div.event__match.event__match--twoLine, div.event__match.event__last--event.event__match--twoLine')
+
+        # Extract teams and scores
+        results = []
+        for game in games:
+            home_team = game.select_one('.event__participant.event__participant--home').text
+            away_team = game.select_one('.event__participant.event__participant--away').text
+            home_score = game.find('div', class_='event__score event__score--home').text
+            away_score = game.find('div', class_='event__score event__score--away').text
+
+            results.append({
+                'HomeTeam': home_team,
+                'AwayTeam': away_team,
+                'HomeScore': home_score,
+                'AwayScore': away_score
+            })
+        return results
+
     def collect_nba_games(self):
         data = {}
 
@@ -64,9 +128,6 @@ class NbaTeamScraper_espn:
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-extensions')  # Disabling extensions can save resources
             chrome_options.add_argument('--disable-plugins')  # Disable plugins
-            chrome_options.add_argument("--enable-logging")
-            chrome_options.add_argument("--v=1")  # Increase verbosity
-            chrome_options.add_argument("--log-level=0")  # Log all levels
             chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36")
             prefs = {
                 'profile.managed_default_content_settings.images': 2,
@@ -87,7 +148,7 @@ class NbaTeamScraper_espn:
             html_content = driver.page_source
             driver.quit()
         # Parse the HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'lxml')
 
         date_elements = soup.find_all("div", class_="style_dateBar__1adEH")
 
@@ -105,7 +166,7 @@ class NbaTeamScraper_espn:
                     team_names = next_sibling.find_all("span", class_="ellipsis event-row-participant style_participant__2BBhy")
                     # Extract the text for each team name
                     teams = [name.get_text(strip=True) for name in team_names]
-                    cleaned_teams = [' '.join(team.split()) for team in teams]
+                    cleaned_teams = [self.normalize_team_name(' '.join(team.split())) for team in teams]
                     # Find all market values within the row
                     market_values = next_sibling.find_all("button", class_="market-btn style_button__G9pbN style_pill__2U30o style_vertical__2J4sL")
                     row_data = {
@@ -161,9 +222,6 @@ class NbaTeamScraper_espn:
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-extensions')  # Disabling extensions can save resources
             chrome_options.add_argument('--disable-plugins')  # Disable plugins
-            chrome_options.add_argument("--enable-logging")
-            chrome_options.add_argument("--v=1")  # Increase verbosity
-            chrome_options.add_argument("--log-level=0")  # Log all levels
             chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36")
             prefs = {
                 'profile.managed_default_content_settings.images': 2,
@@ -205,7 +263,7 @@ class NbaTeamScraper_espn:
         # Combine team names with their stats
         for name, stats in zip(team_names, team_stats):
             row_data = {
-                "Team": name,
+                "Team": self.normalize_team_name(name),
                 'Games': int(stats[0]) + int(stats[1]),
                 'Wins': stats[0],
                 'Losses': stats[1],
@@ -216,5 +274,5 @@ class NbaTeamScraper_espn:
                 'STRK':stats[11],
                 'L10': stats[12]
             }
-            data[name] = row_data
+            data[self.normalize_team_name(name)] = row_data
         return data

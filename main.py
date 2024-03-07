@@ -29,7 +29,7 @@ def run_scheduler(db_client, scraper):
     while True:
         schedule.run_pending()
         time.sleep(60)  # Check every minute
-def on_startup(db_client, scraper, skip_standings, skip_games):
+def on_startup(db_client, scraper, skip_standings, skip_games, skip_results):
     if not skip_standings:
         print("Startup: Fetch standings")
         scraped_team_data = scraper.collect_nba_team_data()
@@ -38,17 +38,23 @@ def on_startup(db_client, scraper, skip_standings, skip_games):
         print("Startup: Fetch games")
         scraped_games = scraper.collect_nba_games()
         db_client.insert_nba_games("nba_games", scraped_games)
+    if not skip_results:
+        print("Startup: Fetch results")
+        scraped_results = scraper.collect_nba_results()
+        db_client.insert_nba_results("nba_games", scraped_results)
+
 
 def main():
     isMock = False
     skip_standings = False
     skip_games = False
+    skip_results = False
     # Initialize the database client
     load_dotenv()
     mongo_uri = os.getenv('MONGODB_URI')
     db_client = DatabaseClient(mongo_uri)
     scraper = NbaTeamScraper_espn(isMock)
-    on_startup(db_client, scraper, skip_standings, skip_games)
+    on_startup(db_client, scraper, skip_standings, skip_games, skip_results)
 
     # Initialize the API consumer
     api_consumer = APIConsumer("your_api_key")
