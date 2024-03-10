@@ -50,6 +50,32 @@ class API:
             except Exception as e:
                 return jsonify({"error": str(e)}), 500
 
+        @self.app.route('/results/nba<date>', methods=['GET'])
+        def get_results(date):
+            print("Getting games")
+            try:
+                today = datetime.now().strftime("%y%m%d")
+                # Assuming get_data method fetches data from your database
+                data_today = self.db_client.get_games_nba(date)
+                for game in data_today["games"]:
+                    game["Date"] = datetime.now().strftime("%y%m%d")
+                    game["Game"] = f"{game['HomeTeam']} - {game['AwayTeam']}"
+                try:
+                    yesterday = (datetime.now() + timedelta(days=-3)).strftime("%y%m%d")
+                    data_yesterday = self.db_client.get_games_nba(yesterday)
+                    for game in data_yesterday["games"]:
+                        game["Date"] = (datetime.now() + timedelta(days=-3)).strftime("%y%m%d")
+                        game["Game"] = f"{game['HomeTeam']} - {game['AwayTeam']}"
+                except Exception as e:
+                    return jsonify(data_today), 200
+                # merged_dict = {**data_today, **data_tomorrow}
+                results = {}
+                results['today'] = data_today
+                results['yesterday'] = data_yesterday
+                return jsonify(results), 200
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
         @self.app.route('/test-cors')
         def test_cors():
             return jsonify(message="CORS is working")

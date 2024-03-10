@@ -73,7 +73,7 @@ class DatabaseClient:
         game_doc["_id"] = str(game_doc["_id"])
         return game_doc
 
-    def get_results_nba(self, game_date, date):
+    def get_results_nba(self, game_date):
         game_collection = self.db["nba_games"]
         game_cursor = game_collection.find({"date": game_date})
         game_list = list(game_cursor)

@@ -46,9 +46,9 @@ def on_startup(db_client, scraper, skip_standings, skip_games, skip_results):
 
 def main():
     isMock = False
-    skip_standings = False
-    skip_games = False
-    skip_results = False
+    skip_standings =
+    skip_games = True
+    skip_results = True
     # Initialize the database client
     load_dotenv()
     mongo_uri = os.getenv('MONGODB_URI')
