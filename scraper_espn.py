@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from collections import defaultdict
 #from selenium.webdriver.firefox.options import Options
 
 class NbaTeamScraper_espn:
@@ -54,7 +55,8 @@ class NbaTeamScraper_espn:
             with open(file_path, 'r', encoding='utf-8') as file:
                 html_content = file.read()
         else:
-            url = "https://www.flashscore.com/basketball/usa/nba/"
+            #url = "https://www.flashscore.com/basketball/usa/nba/"
+            url = "https://www.flashscore.com/basketball/usa/nba/results/"
             # Initialize the WebDriver (example with Chrome)
             chrome_options = Options()
             chrome_options.add_argument("--headless")
@@ -86,24 +88,27 @@ class NbaTeamScraper_espn:
         # Parsing the HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        games = soup.find_all('div', class_=['event__match event__match--twoLine', 'event__match event__match--last event__match--twoLine'])
+        games = soup.find_all('div', class_=['event__match event__match--static event__match--twoLine', 'event__match event__match--static event__match--last event__match--twoLine'])
         #games = soup.select('div.event__match.event__match--twoLine, div.event__match.event__last--event.event__match--twoLine')
 
         # Extract teams and scores
-        results = []
+        results = defaultdict(list)
         for game in games:
+            time = game.select_one('.event__time').text
+            game_date = datetime.now().strftime("%y") + time[3:5] + time[0:2]
             home_team = game.select_one('.event__participant.event__participant--home').text
             away_team = game.select_one('.event__participant.event__participant--away').text
             home_score = game.find('div', class_='event__score event__score--home').text
             away_score = game.find('div', class_='event__score event__score--away').text
 
-            results.append({
+            results[game_date].append({
                 'HomeTeam': home_team,
                 'AwayTeam': away_team,
                 'HomeScore': home_score,
                 'AwayScore': away_score
             })
-        return results
+        organized_data = dict(results)
+        return organized_data
 
     def collect_nba_games(self):
         data = {}

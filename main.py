@@ -17,14 +17,20 @@ def scheduled_scrape(db_client, scraper, time):
     db_client.insert_nba_team_data("nba_teams", scraped_team_data)
     scraped_games = scraper.collect_nba_games()
     db_client.insert_nba_games("nba_games", scraped_games)
+    scraped_results = scraper.collect_nba_results()
+    db_client.insert_nba_results("nba_games", scraped_results)
 
 def run_scheduler(db_client, scraper):
     print("Starting scheduler...")
     scheduled_task_0600 = partial(scheduled_scrape, db_client, scraper, "0600")
+    scheduled_task_1200 = partial(scheduled_scrape, db_client, scraper, "1200")
     scheduled_task_1600 = partial(scheduled_scrape, db_client, scraper, "1600")
+    scheduled_task_2000 = partial(scheduled_scrape, db_client, scraper, "2000")
     # Define the schedule for your tasks
     schedule.every().day.at("06:00").do(scheduled_task_0600)
-    schedule.every().day.at("16:00").do(scheduled_task_1600)
+    schedule.every().day.at("12:00").do(scheduled_task_1200)
+    schedule.every().day.at("06:00").do(scheduled_task_1600)
+    schedule.every().day.at("20:00").do(scheduled_task_2000)
     print("Scheduler set up, entering loop...")
     while True:
         schedule.run_pending()
@@ -46,7 +52,7 @@ def on_startup(db_client, scraper, skip_standings, skip_games, skip_results):
 
 def main():
     isMock = False
-    skip_standings =
+    skip_standings = True
     skip_games = True
     skip_results = True
     # Initialize the database client
